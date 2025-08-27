@@ -6,6 +6,9 @@ use crate::utils::{Utils, HistoryEntry};
 pub async fn handle_fix(user_context: &str) -> Result<()> {
     println!("🔍 Analyzing terminal history for errors...");
     
+    // Check zsh configuration for better error tracking
+    check_zsh_configuration();
+    
     // Get shell history (last 25 commands to give more context)
     let history = match Utils::get_extended_shell_history(25) {
         Ok(hist) => hist,
@@ -40,7 +43,8 @@ pub async fn handle_fix(user_context: &str) -> Result<()> {
                 
                 let startup_context = startup_errors.join("\n");
                 let config = Config::load()?;
-                let client = AiClient::new(config.ai, config.git)?;
+                let (provider_config, command_config) = config.get_error_analysis_ai_config()?;
+                let client = AiClient::new(provider_config.clone(), command_config.clone(), config.git.clone())?;
                 
                 let mut context = String::new();
                 context.push_str(&format!("Shell: {}\n", Utils::get_current_shell().unwrap_or_else(|_| "unknown".to_string())));
@@ -166,7 +170,8 @@ pub async fn handle_fix(user_context: &str) -> Result<()> {
     // Load AI configuration and analyze
     println!("🤖 Loading AI configuration...");
     let config = Config::load()?;
-    let client = AiClient::new(config.ai, config.git)?;
+    let (provider_config, command_config) = config.get_error_analysis_ai_config()?;
+    let client = AiClient::new(provider_config.clone(), command_config.clone(), config.git)?;
 
     println!("🧠 Analyzing error and generating solution...");
     let ai_response = client.analyze_and_fix_error(&context, user_context).await?;
@@ -230,5 +235,15 @@ pub fn extract_commands_from_response(response: &str) -> Option<Vec<String>> {
         None
     } else {
         Some(commands)
+    }
+}
+
+fn check_zsh_configuration() {
+    let shell = Utils::get_current_shell().unwrap_or_else(|_| "unknown".to_string());
+    
+    if shell == "zsh" && !Utils::is_zsh_extended_history_enabled() {
+        println!("💡 Tip: Enable zsh EXTENDED_HISTORY for better error tracking:");
+        Utils::show_zsh_extended_history_tip();
+        println!();
     }
 }

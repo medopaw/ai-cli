@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use dirs::home_dir;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -9,13 +10,37 @@ include!(concat!(env!("OUT_DIR"), "/default_config.rs"));
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
-    pub ai: AiConfig,
+    pub providers: HashMap<String, ProviderConfig>,
+    pub commands: CommandsConfig,
     pub git: GitConfig,
     pub history: HistoryConfig,
+    // Keep old ai field for backward compatibility
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ai: Option<LegacyAiConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AiConfig {
+pub struct ProviderConfig {
+    pub api_key: String,
+    pub base_url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CommandsConfig {
+    pub git_operations: CommandAiConfig,
+    pub conversation: CommandAiConfig,
+    pub error_analysis: CommandAiConfig,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CommandAiConfig {
+    pub provider: String,
+    pub model: String,
+}
+
+// Keep old structure for backward compatibility
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LegacyAiConfig {
     pub provider: String,
     pub model: String,
     pub base_url: String,
@@ -31,13 +56,40 @@ pub struct HistoryConfig {
     pub enabled: bool,
 }
 
+// For parsing legacy config files
+#[derive(Debug, Serialize, Deserialize)]
+struct LegacyConfigFormat {
+    pub ai: LegacyAiConfig,
+    pub git: GitConfig,
+    pub history: HistoryConfig,
+}
+
 impl Default for Config {
     fn default() -> Self {
-        Self {
-            ai: AiConfig {
-                provider: DEFAULT_AI_PROVIDER.to_string(),
-                model: DEFAULT_AI_MODEL.to_string(),
+        let mut providers = HashMap::new();
+        providers.insert(
+            DEFAULT_AI_PROVIDER.to_string(),
+            ProviderConfig {
+                api_key: "".to_string(), // Will be filled from environment or user input
                 base_url: DEFAULT_AI_BASE_URL.to_string(),
+            },
+        );
+
+        Self {
+            providers,
+            commands: CommandsConfig {
+                git_operations: CommandAiConfig {
+                    provider: DEFAULT_AI_PROVIDER.to_string(),
+                    model: DEFAULT_AI_MODEL.to_string(),
+                },
+                conversation: CommandAiConfig {
+                    provider: DEFAULT_AI_PROVIDER.to_string(),
+                    model: DEFAULT_AI_MODEL.to_string(),
+                },
+                error_analysis: CommandAiConfig {
+                    provider: DEFAULT_AI_PROVIDER.to_string(),
+                    model: DEFAULT_AI_MODEL.to_string(),
+                },
             },
             git: GitConfig {
                 commit_prompt: DEFAULT_GIT_COMMIT_PROMPT.to_string(),
@@ -45,6 +97,7 @@ impl Default for Config {
             history: HistoryConfig { 
                 enabled: DEFAULT_HISTORY_ENABLED 
             },
+            ai: None, // No legacy config by default
         }
     }
 }
@@ -63,10 +116,128 @@ impl Config {
         let content = fs::read_to_string(&config_path)
             .context("Failed to read config file")?;
         
-        let config: Config = toml::from_str(&content)
-            .context("Failed to parse config file")?;
+        // Try to parse as new format first
+        match toml::from_str::<Config>(&content) {
+            Ok(mut config) => {
+                // Check if we need to migrate from legacy format
+                if let Some(legacy_ai) = config.ai.clone() {
+                    config = Self::migrate_from_legacy(config, legacy_ai)?;
+                }
+                Ok(config)
+            },
+            Err(_) => {
+                // Try to parse as legacy format and migrate
+                let legacy_config: LegacyConfigFormat = toml::from_str(&content)
+                    .context("Failed to parse config file in both new and legacy formats")?;
+                Self::migrate_legacy_config(legacy_config)
+            }
+        }
+    }
+
+    fn migrate_from_legacy(mut config: Config, legacy_ai: LegacyAiConfig) -> Result<Config> {
+        // Update providers with legacy info if not already present
+        if !config.providers.contains_key(&legacy_ai.provider) {
+            config.providers.insert(
+                legacy_ai.provider.clone(),
+                ProviderConfig {
+                    api_key: "".to_string(), // Will be filled from environment
+                    base_url: legacy_ai.base_url.clone(),
+                },
+            );
+        }
+
+        // Update all commands to use legacy provider/model if they're still default
+        let default_provider = DEFAULT_AI_PROVIDER;
+        let default_model = DEFAULT_AI_MODEL;
+
+        if config.commands.git_operations.provider == default_provider 
+            && config.commands.git_operations.model == default_model {
+            config.commands.git_operations.provider = legacy_ai.provider.clone();
+            config.commands.git_operations.model = legacy_ai.model.clone();
+        }
+
+        if config.commands.conversation.provider == default_provider 
+            && config.commands.conversation.model == default_model {
+            config.commands.conversation.provider = legacy_ai.provider.clone();
+            config.commands.conversation.model = legacy_ai.model.clone();
+        }
+
+        if config.commands.error_analysis.provider == default_provider 
+            && config.commands.error_analysis.model == default_model {
+            config.commands.error_analysis.provider = legacy_ai.provider.clone();
+            config.commands.error_analysis.model = legacy_ai.model.clone();
+        }
+
+        // Clear legacy config after migration
+        config.ai = None;
+
+        // Save migrated config
+        config.save()?;
+
+        Ok(config)
+    }
+
+    fn migrate_legacy_config(legacy: LegacyConfigFormat) -> Result<Config> {
+        let mut providers = HashMap::new();
+        providers.insert(
+            legacy.ai.provider.clone(),
+            ProviderConfig {
+                api_key: "".to_string(), // Will be filled from environment
+                base_url: legacy.ai.base_url.clone(),
+            },
+        );
+
+        let config = Config {
+            providers,
+            commands: CommandsConfig {
+                git_operations: CommandAiConfig {
+                    provider: legacy.ai.provider.clone(),
+                    model: legacy.ai.model.clone(),
+                },
+                conversation: CommandAiConfig {
+                    provider: legacy.ai.provider.clone(),
+                    model: legacy.ai.model.clone(),
+                },
+                error_analysis: CommandAiConfig {
+                    provider: legacy.ai.provider.clone(),
+                    model: legacy.ai.model.clone(),
+                },
+            },
+            git: legacy.git,
+            history: legacy.history,
+            ai: None,
+        };
+
+        // Save migrated config
+        config.save()?;
         
         Ok(config)
+    }
+
+    pub fn get_ai_config_for_command(&self, command_type: &str) -> Result<(&ProviderConfig, &CommandAiConfig)> {
+        let command_config = match command_type {
+            "git_operations" => &self.commands.git_operations,
+            "conversation" => &self.commands.conversation,
+            "error_analysis" => &self.commands.error_analysis,
+            _ => return Err(anyhow::anyhow!("Unknown command type: {}", command_type)),
+        };
+
+        let provider_config = self.providers.get(&command_config.provider)
+            .ok_or_else(|| anyhow::anyhow!("Provider '{}' not found in config", command_config.provider))?;
+
+        Ok((provider_config, command_config))
+    }
+
+    pub fn get_git_operations_ai_config(&self) -> Result<(&ProviderConfig, &CommandAiConfig)> {
+        self.get_ai_config_for_command("git_operations")
+    }
+
+    pub fn get_conversation_ai_config(&self) -> Result<(&ProviderConfig, &CommandAiConfig)> {
+        self.get_ai_config_for_command("conversation")
+    }
+
+    pub fn get_error_analysis_ai_config(&self) -> Result<(&ProviderConfig, &CommandAiConfig)> {
+        self.get_ai_config_for_command("error_analysis")
     }
 
     pub fn save(&self) -> Result<()> {

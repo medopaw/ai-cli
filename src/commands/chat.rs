@@ -9,7 +9,8 @@ pub async fn handle_chat() -> Result<()> {
     println!();
     
     let config = Config::load()?;
-    let client = AiClient::new(config.ai, config.git)?;
+    let (provider_config, command_config) = config.get_conversation_ai_config()?;
+    let client = AiClient::new(provider_config.clone(), command_config.clone(), config.git.clone())?;
     
     let mut conversation: Vec<ChatMessage> = Vec::new();
     

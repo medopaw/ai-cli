@@ -50,14 +50,6 @@ async fn main() -> Result<()> {
             let user_context = remaining_args.join(" ");
             handle_fix(&user_context).await?;
         }
-        "setup" => {
-            if remaining_args.contains(&"zsh".to_string()) {
-                let advanced = remaining_args.contains(&"--advanced".to_string());
-                handle_setup_zsh(advanced).await?;
-            } else {
-                handle_setup().await?;
-            }
-        }
         _ => {
             eprintln!("Error: Unknown command '{}'", subcommand);
             show_help();
@@ -81,7 +73,6 @@ fn show_help() {
     println!("    push       Push changes to remote repository");
     println!("    publish    Publish project to appropriate registry");
     println!("    fix        Analyze terminal history and fix the last error");
-    println!("    setup      Show setup instructions for better AI CLI experience");
     println!();
     println!("EXAMPLES:");
     println!("    ai ask \"How do I write a Rust function?\"");
@@ -90,7 +81,6 @@ fn show_help() {
     println!("    ai push force");
     println!("    ai fix");
     println!("    ai fix \"cargo build failed with linking error\"");
-    println!("    ai setup zsh");
 }
 
 

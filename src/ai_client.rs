@@ -1,21 +1,23 @@
-use crate::config::{AiConfig, GitConfig};
+use crate::config::{ProviderConfig, CommandAiConfig, GitConfig};
 use anyhow::{anyhow, Result};
 use ai::clients::ollama;
 use ai::chat_completions::{ChatCompletion, ChatCompletionMessage, ChatCompletionRequestBuilder};
 
 pub struct AiClient {
-    config: AiConfig,
+    provider_config: ProviderConfig,
+    command_config: CommandAiConfig,
     git_config: GitConfig,
     ollama_client: ollama::Client,
 }
 
 impl AiClient {
-    pub fn new(config: AiConfig, git_config: GitConfig) -> Result<Self> {
-        let ollama_client = ollama::Client::from_url(&config.base_url)
+    pub fn new(provider_config: ProviderConfig, command_config: CommandAiConfig, git_config: GitConfig) -> Result<Self> {
+        let ollama_client = ollama::Client::from_url(&provider_config.base_url)
             .map_err(|e| anyhow!("Failed to create Ollama client: {}", e))?;
         
         Ok(Self { 
-            config, 
+            provider_config, 
+            command_config,
             git_config,
             ollama_client,
         })
@@ -23,7 +25,7 @@ impl AiClient {
 
     pub async fn ask(&self, question: &str) -> Result<String> {
         let request = ChatCompletionRequestBuilder::default()
-            .model(&self.config.model)
+            .model(&self.command_config.model)
             .messages(vec![
                 ChatCompletionMessage::User(question.into()),
             ])
@@ -52,7 +54,7 @@ impl AiClient {
             .collect();
 
         let request = ChatCompletionRequestBuilder::default()
-            .model(&self.config.model)
+            .model(&self.command_config.model)
             .messages(ai_messages)
             .build()
             .map_err(|e| anyhow!("Failed to build chat request: {}", e))?;
@@ -123,7 +125,7 @@ For shell startup errors, common causes include:
     pub async fn is_available(&self) -> bool {
         // Simple health check by trying to make a minimal request
         let request = ChatCompletionRequestBuilder::default()
-            .model(&self.config.model)
+            .model(&self.command_config.model)
             .messages(vec![ChatCompletionMessage::User("hello".into())])
             .build();
         
