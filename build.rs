@@ -17,12 +17,42 @@ fn main() {
     let config: toml::Value = toml::from_str(&default_config_content)
         .expect("Failed to parse ai.conf.toml.default");
 
-    // Extract values
-    let ai_provider = config["ai"]["provider"].as_str().unwrap_or("ollama");
-    let ai_model = config["ai"]["model"].as_str().unwrap_or("qwen2.5:7b");
-    let ai_base_url = config["ai"]["base_url"].as_str().unwrap_or("http://localhost:11434");
-    let git_commit_prompt = config["git"]["commit_prompt"].as_str().unwrap_or("");
-    let history_enabled = config["history"]["enabled"].as_bool().unwrap_or(false);
+    // Extract values from the new config format - fail if missing required fields
+    let ai_provider = config
+        .get("commands")
+        .and_then(|c| c.get("git_operations"))
+        .and_then(|g| g.get("provider"))
+        .and_then(|p| p.as_str())
+        .expect("Missing required field: commands.git_operations.provider in ai.conf.toml.default");
+    
+    let ai_model = config
+        .get("commands")
+        .and_then(|c| c.get("git_operations"))
+        .and_then(|g| g.get("model"))
+        .and_then(|m| m.as_str())
+        .expect("Missing required field: commands.git_operations.model in ai.conf.toml.default");
+    
+    // Get base_url from the first provider (assume it's the default one)
+    let providers = config.get("providers")
+        .and_then(|p| p.as_table())
+        .expect("Missing required section: [providers] in ai.conf.toml.default");
+    
+    let first_provider = providers.iter().next()
+        .expect("No providers found in ai.conf.toml.default");
+    
+    let ai_base_url = first_provider.1.get("base_url")
+        .and_then(|b| b.as_str())
+        .expect("Missing required field: base_url in provider configuration");
+    
+    let git_commit_prompt = config.get("git")
+        .and_then(|g| g.get("commit_prompt"))
+        .and_then(|p| p.as_str())
+        .expect("Missing required field: git.commit_prompt in ai.conf.toml.default");
+    
+    let history_enabled = config.get("history")
+        .and_then(|h| h.get("enabled"))
+        .and_then(|e| e.as_bool())
+        .expect("Missing required field: history.enabled in ai.conf.toml.default");
 
     // Escape the commit prompt for use in Rust string literal
     let escaped_prompt = git_commit_prompt.replace("\\", "\\\\").replace("\"", "\\\"");

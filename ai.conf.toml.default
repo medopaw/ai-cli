@@ -1,8 +1,19 @@
-# AI 服务配置
-[ai]
+# AI 服务提供商配置
+[providers.ollama]
+base_url = "http://localhost:11434"
+
+# 不同命令使用的AI配置
+[commands.git_operations]  # commit, push, publish 命令
 provider = "ollama"
 model = "qwen2.5:7b"
-base_url = "http://localhost:11434"
+
+[commands.conversation]    # ask, chat 命令
+provider = "ollama"
+model = "qwen2.5:7b"
+
+[commands.error_analysis]  # fix 命令
+provider = "ollama"
+model = "qwen2.5:7b"
 
 # Commit message 提示模板
 [git]

@@ -21,6 +21,7 @@ pub struct Config {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProviderConfig {
+    #[serde(default)]
     pub api_key: String,
     pub base_url: String,
 }
