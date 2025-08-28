@@ -143,14 +143,20 @@ pub async fn handle_push(force: bool) -> Result<()> {
                                 
                                 // Try to push
                                 match GitOperations::push() {
-                                    Ok(()) => println!("✓ Code pushed successfully!"),
+                                    Ok(output) => {
+                                        if output.contains("Everything up-to-date") {
+                                            println!("Everything up-to-date");
+                                        } else {
+                                            println!("{}", output);
+                                        }
+                                    }
                                     Err(_) => {
                                         // Try setting upstream and push
                                         if let Ok(branch) = GitOperations::get_current_branch() {
                                             if let Err(e) = GitOperations::set_upstream("origin", &branch) {
                                                 println!("Error: Failed to push code: {}", e);
                                             } else {
-                                                println!("✓ Code pushed successfully!");
+                                                println!("✓ Upstream branch '{}' set and pushed successfully!", branch);
                                             }
                                         }
                                     }
@@ -184,8 +190,12 @@ pub async fn handle_push(force: bool) -> Result<()> {
     };
 
     match push_result {
-        Ok(()) => {
-            println!("✓ Pushed successfully!");
+        Ok(output) => {
+            if output.contains("Everything up-to-date") {
+                println!("Everything up-to-date");
+            } else {
+                println!("{}", output);
+            }
         }
         Err(e) => {
             println!("Push failed: {}", e);
@@ -195,7 +205,7 @@ pub async fn handle_push(force: bool) -> Result<()> {
                 if Utils::confirm("Set upstream branch and push?")? {
                     let branch = GitOperations::get_current_branch()?;
                     GitOperations::set_upstream("origin", &branch)?;
-                    println!("✓ Upstream set and pushed successfully!");
+                    println!("✓ Upstream branch '{}' set and pushed successfully!", branch);
                 }
             }
         }

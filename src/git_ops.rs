@@ -79,7 +79,7 @@ impl GitOperations {
         Ok(())
     }
 
-    pub fn push() -> Result<()> {
+    pub fn push() -> Result<String> {
         let output = Command::new("git")
             .args(["push"])
             .output()
@@ -90,10 +90,23 @@ impl GitOperations {
             return Err(anyhow!("git push failed: {}", error));
         }
 
-        Ok(())
+        // Return the push output for display
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        
+        // Git push typically outputs to stderr, so combine both
+        let combined_output = if !stderr.is_empty() {
+            stderr.to_string()
+        } else if !stdout.is_empty() {
+            stdout.to_string()
+        } else {
+            "Everything up-to-date".to_string()
+        };
+
+        Ok(combined_output.trim().to_string())
     }
 
-    pub fn push_force() -> Result<()> {
+    pub fn push_force() -> Result<String> {
         let output = Command::new("git")
             .args(["push", "-f"])
             .output()
@@ -104,7 +117,20 @@ impl GitOperations {
             return Err(anyhow!("git push -f failed: {}", error));
         }
 
-        Ok(())
+        // Return the push output for display
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        
+        // Git push typically outputs to stderr, so combine both
+        let combined_output = if !stderr.is_empty() {
+            stderr.to_string()
+        } else if !stdout.is_empty() {
+            stdout.to_string()
+        } else {
+            "Everything up-to-date".to_string()
+        };
+
+        Ok(combined_output.trim().to_string())
     }
 
     pub fn has_remote() -> bool {
