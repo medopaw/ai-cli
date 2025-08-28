@@ -46,7 +46,8 @@ impl Utils {
         }
     }
 
-    /// Get current working directory as string
+    /// Get current working directory as string  
+    #[allow(dead_code)]
     pub fn current_dir() -> Result<String> {
         Ok(std::env::current_dir()
             .map_err(|e| anyhow!("Failed to get current directory: {}", e))?
@@ -216,6 +217,7 @@ impl Utils {
     }
 
     /// Show advanced error capture setup
+    #[allow(dead_code)]
     pub fn show_error_capture_setup() {
         println!("🔥 Advanced: Auto-capture shell startup errors");
         println!();
@@ -402,5 +404,6 @@ impl Utils {
 pub struct HistoryEntry {
     pub command: String,
     pub exit_code: Option<i32>,
+    #[allow(dead_code)]
     pub timestamp: Option<String>,
 }

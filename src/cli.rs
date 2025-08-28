@@ -32,9 +32,15 @@ pub enum Commands {
     },
     /// Publish project to appropriate registry
     Publish,
+    /// Analyze terminal history and fix the last error
+    Fix {
+        /// Additional context or specific error description
+        context: Option<String>,
+    },
 }
 
 impl Commands {
+    #[allow(dead_code)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "help" => Some(Commands::Help),
@@ -43,7 +49,9 @@ impl Commands {
             "commit" => Some(Commands::Commit { all: false }),
             "push" => Some(Commands::Push { force: false }),
             "publish" => Some(Commands::Publish),
+            "fix" => Some(Commands::Fix { context: None }),
             _ => None,
         }
     }
 }
+

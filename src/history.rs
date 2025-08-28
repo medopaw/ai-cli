@@ -5,11 +5,13 @@ use std::path::Path;
 use anyhow::Result;
 
 #[cfg(feature = "history")]
+#[allow(dead_code)]
 pub struct HistoryManager {
     conn: Connection,
 }
 
 #[cfg(feature = "history")]
+#[allow(dead_code)]
 impl HistoryManager {
     pub fn new(db_path: &Path) -> Result<Self> {
         let conn = Connection::open(db_path)?;
@@ -75,9 +77,11 @@ impl HistoryManager {
 }
 
 #[cfg(not(feature = "history"))]
+#[allow(dead_code)]
 pub struct HistoryManager;
 
 #[cfg(not(feature = "history"))]
+#[allow(dead_code)]
 impl HistoryManager {
     pub fn new(_db_path: &Path) -> Result<Self> {
         Ok(Self)
@@ -100,6 +104,7 @@ impl HistoryManager {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct HistoryEntry {
     pub timestamp: String,
     pub working_dir: String,

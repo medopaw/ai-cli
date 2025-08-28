@@ -25,6 +25,7 @@ impl GitOperations {
         Ok(String::from_utf8(output.stdout)?)
     }
 
+    #[allow(dead_code)]
     pub fn get_unstaged_diff() -> Result<String> {
         let output = Command::new("git")
             .args(["diff"])

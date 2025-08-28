@@ -285,6 +285,7 @@ impl Config {
         Ok(home.join(".ai.conf.toml"))
     }
 
+    #[allow(dead_code)]
     pub fn history_db_path() -> Result<PathBuf> {
         let home = home_dir()
             .context("Could not determine home directory")?;

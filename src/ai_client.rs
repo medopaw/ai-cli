@@ -37,6 +37,7 @@ impl AiClient {
         }
     }
     
+    #[allow(dead_code)]
     pub fn new(provider_config: ProviderConfig, command_config: CommandAiConfig, git_config: GitConfig) -> Result<Self> {
         let client = Self::create_client(&command_config.provider, &provider_config)?;
         
@@ -176,6 +177,7 @@ For shell startup errors, common causes include:
         self.ask(&full_prompt).await
     }
 
+    #[allow(dead_code)]
     pub async fn is_available(&self) -> bool {
         // Simple health check by trying to make a minimal request
         let request = ChatCompletionRequestBuilder::default()
