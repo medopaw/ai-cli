@@ -1,39 +1,62 @@
 use crate::config::{ProviderConfig, CommandAiConfig, GitConfig, Config};
 use anyhow::{anyhow, Result};
-use ai::clients::ollama;
+use ai::clients::{ollama, openai};
 use ai::chat_completions::{ChatCompletion, ChatCompletionMessage, ChatCompletionRequestBuilder};
+
+pub enum AiClientType {
+    Ollama(ollama::Client),
+    OpenAi(openai::Client),
+}
 
 pub struct AiClient {
     provider_config: ProviderConfig,
     command_config: CommandAiConfig,
     git_config: GitConfig,
-    ollama_client: ollama::Client,
+    client: AiClientType,
     full_config: Option<Config>,
 }
 
 impl AiClient {
+    fn create_client(provider_name: &str, provider_config: &ProviderConfig) -> Result<AiClientType> {
+        match provider_name {
+            "ollama" => {
+                let client = ollama::Client::from_url(&provider_config.base_url)
+                    .map_err(|e| anyhow!("Failed to create Ollama client: {}", e))?;
+                Ok(AiClientType::Ollama(client))
+            }
+            "openai" | "deepseek" => {
+                let client = if provider_config.api_key.is_empty() {
+                    return Err(anyhow!("API key is required for {} provider", provider_name));
+                } else {
+                    openai::Client::from_url(&provider_config.api_key, &provider_config.base_url)
+                        .map_err(|e| anyhow!("Failed to create OpenAI client: {}", e))?
+                };
+                Ok(AiClientType::OpenAi(client))
+            }
+            _ => Err(anyhow!("Unsupported provider: {}", provider_name)),
+        }
+    }
+    
     pub fn new(provider_config: ProviderConfig, command_config: CommandAiConfig, git_config: GitConfig) -> Result<Self> {
-        let ollama_client = ollama::Client::from_url(&provider_config.base_url)
-            .map_err(|e| anyhow!("Failed to create Ollama client: {}", e))?;
+        let client = Self::create_client(&command_config.provider, &provider_config)?;
         
         Ok(Self { 
             provider_config, 
             command_config,
             git_config,
-            ollama_client,
+            client,
             full_config: None,
         })
     }
 
     pub fn new_with_full_config(provider_config: ProviderConfig, command_config: CommandAiConfig, git_config: GitConfig, full_config: Config) -> Result<Self> {
-        let ollama_client = ollama::Client::from_url(&provider_config.base_url)
-            .map_err(|e| anyhow!("Failed to create Ollama client: {}", e))?;
+        let client = Self::create_client(&command_config.provider, &provider_config)?;
         
         Ok(Self { 
             provider_config, 
             command_config,
             git_config,
-            ollama_client,
+            client,
             full_config: Some(full_config),
         })
     }
@@ -47,8 +70,16 @@ impl AiClient {
             .build()
             .map_err(|e| anyhow!("Failed to build chat request: {}", e))?;
 
-        let response = self.ollama_client.chat_completions(&request).await
-            .map_err(|e| self.handle_ollama_error(e))?;
+        let response = match &self.client {
+            AiClientType::Ollama(client) => {
+                client.chat_completions(&request).await
+                    .map_err(|e| self.handle_ollama_error(e))?
+            }
+            AiClientType::OpenAi(client) => {
+                client.chat_completions(&request).await
+                    .map_err(|e| anyhow!("OpenAI API error: {}", e))?
+            }
+        };
 
         if let Some(choice) = response.choices.first() {
             Ok(choice.message.content.clone().unwrap_or_default())
@@ -74,8 +105,16 @@ impl AiClient {
             .build()
             .map_err(|e| anyhow!("Failed to build chat request: {}", e))?;
 
-        let response = self.ollama_client.chat_completions(&request).await
-            .map_err(|e| self.handle_ollama_error(e))?;
+        let response = match &self.client {
+            AiClientType::Ollama(client) => {
+                client.chat_completions(&request).await
+                    .map_err(|e| self.handle_ollama_error(e))?
+            }
+            AiClientType::OpenAi(client) => {
+                client.chat_completions(&request).await
+                    .map_err(|e| anyhow!("OpenAI API error: {}", e))?
+            }
+        };
 
         if let Some(choice) = response.choices.first() {
             Ok(choice.message.content.clone().unwrap_or_default())
@@ -145,7 +184,14 @@ For shell startup errors, common causes include:
             .build();
         
         if let Ok(req) = request {
-            self.ollama_client.chat_completions(&req).await.is_ok()
+            match &self.client {
+                AiClientType::Ollama(client) => {
+                    client.chat_completions(&req).await.is_ok()
+                }
+                AiClientType::OpenAi(client) => {
+                    client.chat_completions(&req).await.is_ok()
+                }
+            }
         } else {
             false
         }

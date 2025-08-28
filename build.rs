@@ -32,17 +32,20 @@ fn main() {
         .and_then(|m| m.as_str())
         .expect("Missing required field: commands.git_operations.model in ai.conf.toml.default");
     
-    // Get base_url from the first provider (assume it's the default one)
+    // Get base_urls from all providers for default values
     let providers = config.get("providers")
         .and_then(|p| p.as_table())
         .expect("Missing required section: [providers] in ai.conf.toml.default");
     
-    let first_provider = providers.iter().next()
-        .expect("No providers found in ai.conf.toml.default");
-    
-    let ai_base_url = first_provider.1.get("base_url")
+    let ollama_base_url = providers.get("ollama")
+        .and_then(|p| p.get("base_url"))
         .and_then(|b| b.as_str())
-        .expect("Missing required field: base_url in provider configuration");
+        .expect("Missing required field: providers.ollama.base_url in ai.conf.toml.default");
+        
+    let deepseek_base_url = providers.get("deepseek")
+        .and_then(|p| p.get("base_url"))
+        .and_then(|b| b.as_str())
+        .unwrap_or("https://api.deepseek.com");
     
     let git_commit_prompt = config.get("git")
         .and_then(|g| g.get("commit_prompt"))
@@ -64,7 +67,8 @@ fn main() {
     
     generated_code.push_str(&format!("pub const DEFAULT_AI_PROVIDER: &str = \"{}\";\n", ai_provider));
     generated_code.push_str(&format!("pub const DEFAULT_AI_MODEL: &str = \"{}\";\n", ai_model));
-    generated_code.push_str(&format!("pub const DEFAULT_AI_BASE_URL: &str = \"{}\";\n", ai_base_url));
+    generated_code.push_str(&format!("pub const DEFAULT_OLLAMA_BASE_URL: &str = \"{}\";\n", ollama_base_url));
+    generated_code.push_str(&format!("pub const DEFAULT_DEEPSEEK_BASE_URL: &str = \"{}\";\n", deepseek_base_url));
     generated_code.push_str(&format!("pub const DEFAULT_GIT_COMMIT_PROMPT: &str = \"{}\";\n", escaped_prompt));
     generated_code.push_str(&format!("pub const DEFAULT_HISTORY_ENABLED: bool = {};\n", history_enabled));
 

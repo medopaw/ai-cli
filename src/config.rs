@@ -23,6 +23,7 @@ pub struct Config {
 pub struct ProviderConfig {
     #[serde(default)]
     pub api_key: String,
+    #[serde(default)]
     pub base_url: String,
 }
 
@@ -69,10 +70,17 @@ impl Default for Config {
     fn default() -> Self {
         let mut providers = HashMap::new();
         providers.insert(
-            DEFAULT_AI_PROVIDER.to_string(),
+            "ollama".to_string(),
             ProviderConfig {
-                api_key: "".to_string(), // Will be filled from environment or user input
-                base_url: DEFAULT_AI_BASE_URL.to_string(),
+                api_key: "".to_string(),
+                base_url: DEFAULT_OLLAMA_BASE_URL.to_string(),
+            },
+        );
+        providers.insert(
+            "deepseek".to_string(),
+            ProviderConfig {
+                api_key: "".to_string(), // Will be filled from user input
+                base_url: DEFAULT_DEEPSEEK_BASE_URL.to_string(),
             },
         );
 
@@ -108,10 +116,8 @@ impl Config {
         let config_path = Self::config_path()?;
 
         if !config_path.exists() {
-            // Create config file with default values
-            let default_config = Self::default();
-            default_config.save()?;
-            return Ok(default_config);
+            // Copy default config template and fill in missing values
+            Self::create_default_config_file(&config_path)?;
         }
 
         let content = fs::read_to_string(&config_path)
@@ -253,6 +259,22 @@ impl Config {
         
         fs::write(&config_path, content)
             .context("Failed to write config file")?;
+        
+        Ok(())
+    }
+
+    fn create_default_config_file(config_path: &PathBuf) -> Result<()> {
+        // Read the default config template (already includes all default values)
+        let config_content = include_str!("../ai.conf.toml.default");
+        
+        // Create config directory if it doesn't exist
+        if let Some(parent) = config_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        
+        // Copy template directly to user config path
+        fs::write(config_path, config_content)
+            .context("Failed to copy default config template")?;
         
         Ok(())
     }
