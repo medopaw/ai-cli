@@ -149,4 +149,31 @@ impl GitOperations {
 
         Ok(String::from_utf8(output.stdout)?.trim().to_string())
     }
+
+    pub fn add_remote(name: &str, url: &str) -> Result<()> {
+        let output = Command::new("git")
+            .args(["remote", "add", name, url])
+            .output()
+            .context("Failed to add remote")?;
+
+        if !output.status.success() {
+            let error = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow!("Failed to add remote: {}", error));
+        }
+
+        Ok(())
+    }
+
+    pub fn get_repository_name() -> Result<String> {
+        let current_dir = std::env::current_dir()
+            .context("Failed to get current directory")?;
+        
+        let repo_name = current_dir
+            .file_name()
+            .context("Failed to get directory name")?
+            .to_string_lossy()
+            .to_string();
+
+        Ok(repo_name)
+    }
 }

@@ -26,9 +26,11 @@ impl Utils {
         let items = item_reader.of_bufread(Cursor::new(options_str));
 
         let skim_options = SkimOptionsBuilder::default()
-            .height("50%".to_string())
             .multi(false)
             .prompt(prompt.to_string())
+            .reverse(true)
+            .no_height(true)
+            .no_clear(true)
             .build()
             .map_err(|e| anyhow!("Failed to build skim options: {}", e))?;
 
@@ -397,6 +399,126 @@ impl Utils {
         }
 
         Err(anyhow!("No supported clipboard tool found. Install pbcopy (macOS), xclip (Linux X11), or wl-copy (Linux Wayland)"))
+    }
+
+    /// Create a GitHub repository using gh CLI
+    pub fn create_github_repository(repo_name: &str, is_private: bool) -> Result<String> {
+        if !Self::is_command_available("gh") {
+            return Err(anyhow!("GitHub CLI (gh) is not installed. Please install it: brew install gh"));
+        }
+
+        // Check if user is authenticated
+        let auth_output = Command::new("gh")
+            .args(["auth", "status"])
+            .output()
+            .context("Failed to check GitHub authentication status")?;
+
+        if !auth_output.status.success() {
+            return Err(anyhow!("Not authenticated with GitHub. Run: gh auth login"));
+        }
+
+        // Create the repository
+        let mut args = vec!["repo", "create", repo_name];
+        
+        if is_private {
+            args.push("--private");
+        } else {
+            args.push("--public");
+        }
+        
+        // Add other useful flags
+        args.extend(&["--source=.", "--push"]);
+
+        let output = Command::new("gh")
+            .args(&args)
+            .output()
+            .context("Failed to create GitHub repository")?;
+
+        if !output.status.success() {
+            let error = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow!("Failed to create GitHub repository: {}", error));
+        }
+
+        // Extract the repository URL from stdout
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        
+        // The gh command typically outputs the repository URL
+        for line in stdout.lines() {
+            if line.contains("github.com") && (line.starts_with("https://") || line.contains("git@")) {
+                return Ok(line.trim().to_string());
+            }
+        }
+
+        // Fallback: construct the URL manually
+        let auth_user_output = Command::new("gh")
+            .args(["api", "user", "--jq", ".login"])
+            .output()
+            .context("Failed to get GitHub username")?;
+
+        if auth_user_output.status.success() {
+            let username = String::from_utf8_lossy(&auth_user_output.stdout).trim().to_string();
+            Ok(format!("https://github.com/{}/{}", username, repo_name))
+        } else {
+            Ok(format!("Repository '{}' created successfully", repo_name))
+        }
+    }
+
+    /// Create a GitLab repository using glab CLI
+    pub fn create_gitlab_repository(repo_name: &str, is_private: bool) -> Result<String> {
+        if !Self::is_command_available("glab") {
+            return Err(anyhow!("GitLab CLI (glab) is not installed. Please install it: brew install glab"));
+        }
+
+        // Check if user is authenticated
+        let auth_output = Command::new("glab")
+            .args(["auth", "status"])
+            .output()
+            .context("Failed to check GitLab authentication status")?;
+
+        if !auth_output.status.success() {
+            return Err(anyhow!("Not authenticated with GitLab. Run: glab auth login"));
+        }
+
+        // Create the repository
+        let mut args = vec!["repo", "create", repo_name];
+        
+        if is_private {
+            args.push("--private");
+        } else {
+            args.push("--public");
+        }
+
+        let output = Command::new("glab")
+            .args(&args)
+            .output()
+            .context("Failed to create GitLab repository")?;
+
+        if !output.status.success() {
+            let error = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow!("Failed to create GitLab repository: {}", error));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Get GitLab username using glab CLI
+    pub fn get_gitlab_username() -> Result<String> {
+        let output = Command::new("glab")
+            .args(["api", "user", "--jq", ".username"])
+            .output()
+            .context("Failed to get GitLab username")?;
+
+        if output.status.success() {
+            let username = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !username.is_empty() {
+                Ok(username)
+            } else {
+                Err(anyhow!("Empty username returned"))
+            }
+        } else {
+            Err(anyhow!("Failed to retrieve GitLab username"))
+        }
     }
 }
 

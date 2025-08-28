@@ -81,15 +81,87 @@ pub async fn handle_push(force: bool) -> Result<()> {
                 match choice.as_str() {
                     choice if choice.contains("GitHub") => {
                         println!("Creating GitHub repository...");
-                        // TODO: Implement gh repo create
-                        println!("GitHub repository creation not yet implemented");
-                        return Ok(());
+                        
+                        // Get repository name from current directory
+                        let repo_name = match GitOperations::get_repository_name() {
+                            Ok(name) => name,
+                            Err(e) => {
+                                println!("Error: Failed to get repository name: {}", e);
+                                return Ok(());
+                            }
+                        };
+
+                        // Ask if the repository should be private
+                        let is_private = Utils::confirm("Make repository private?")?;
+                        
+                        // Create GitHub repository
+                        match Utils::create_github_repository(&repo_name, is_private) {
+                            Ok(repo_url) => {
+                                println!("✓ GitHub repository created: {}", repo_url);
+                                
+                                // The gh CLI with --source and --push flags should have already:
+                                // 1. Added the remote
+                                // 2. Pushed the code
+                                // So we can just confirm success and exit
+                                println!("✓ Code pushed successfully!");
+                                return Ok(());
+                            }
+                            Err(e) => {
+                                println!("Error creating GitHub repository: {}", e);
+                                return Ok(());
+                            }
+                        }
                     }
                     choice if choice.contains("GitLab") => {
                         println!("Creating GitLab repository...");
-                        // TODO: Implement glab repo create
-                        println!("GitLab repository creation not yet implemented");
-                        return Ok(());
+                        
+                        // Get repository name from current directory
+                        let repo_name = match GitOperations::get_repository_name() {
+                            Ok(name) => name,
+                            Err(e) => {
+                                println!("Error: Failed to get repository name: {}", e);
+                                return Ok(());
+                            }
+                        };
+
+                        // Ask if the repository should be private
+                        let is_private = Utils::confirm("Make repository private?")?;
+                        
+                        // Create GitLab repository
+                        match Utils::create_gitlab_repository(&repo_name, is_private) {
+                            Ok(message) => {
+                                println!("✓ GitLab repository created: {}", message);
+                                
+                                // For GitLab, we might need to manually add remote and push
+                                // This depends on glab behavior, but for safety let's add the remote
+                                if let Ok(username) = Utils::get_gitlab_username() {
+                                    let repo_url = format!("git@gitlab.com:{}/{}.git", username, repo_name);
+                                    if let Err(e) = GitOperations::add_remote("origin", &repo_url) {
+                                        println!("Warning: Failed to add remote: {}", e);
+                                    }
+                                }
+                                
+                                // Try to push
+                                match GitOperations::push() {
+                                    Ok(()) => println!("✓ Code pushed successfully!"),
+                                    Err(_) => {
+                                        // Try setting upstream and push
+                                        if let Ok(branch) = GitOperations::get_current_branch() {
+                                            if let Err(e) = GitOperations::set_upstream("origin", &branch) {
+                                                println!("Error: Failed to push code: {}", e);
+                                            } else {
+                                                println!("✓ Code pushed successfully!");
+                                            }
+                                        }
+                                    }
+                                }
+                                return Ok(());
+                            }
+                            Err(e) => {
+                                println!("Error creating GitLab repository: {}", e);
+                                return Ok(());
+                            }
+                        }
                     }
                     _ => {
                         println!("Push cancelled");
