@@ -12,7 +12,7 @@ pub async fn handle_commit(all: bool) -> Result<()> {
 
     let config = Config::load()?;
     let (provider_config, command_config) = config.get_git_operations_ai_config()?;
-    let client = AiClient::new(provider_config.clone(), command_config.clone(), config.git.clone())?;
+    let client = AiClient::new_with_full_config(provider_config.clone(), command_config.clone(), config.git.clone(), config.clone())?;
 
     // Handle 'all' flag
     if all {

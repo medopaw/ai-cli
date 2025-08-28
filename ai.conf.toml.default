@@ -5,15 +5,15 @@ base_url = "http://localhost:11434"
 # 不同命令使用的AI配置
 [commands.git_operations]  # commit, push, publish 命令
 provider = "ollama"
-model = "qwen2.5:7b"
+model = "gemma2:9b"        # 专门优化commit message生成
 
 [commands.conversation]    # ask, chat 命令
 provider = "ollama"
-model = "qwen2.5:7b"
+model = "qwen2.5:14b"      # 中文对话能力强
 
 [commands.error_analysis]  # fix 命令
 provider = "ollama"
-model = "qwen2.5:7b"
+model = "qwen2.5-coder:7b"  # Shell错误和系统问题分析专家，支持中文环境
 
 # Commit message 提示模板
 [git]
@@ -25,7 +25,7 @@ Review the diffs carefully.
 Generate a one-line commit message for those changes.
 The commit message should be structured as follows: <type>: <description>
 Use these for <type>: fix, feat, build, chore, ci, docs, style, refactor, perf, test
-The description must start with a lowercase letter.
+IMPORTANT: The description must start with a lowercase letter. Never capitalize the first letter of the description.
 
 Ensure the commit message:
 - Starts with the appropriate prefix.
@@ -33,6 +33,7 @@ Ensure the commit message:
 - Does not exceed 72 characters.
 
 Reply only with the one-line commit message, without any additional text, explanations, or line breaks.
+Remember: description must start with lowercase letter (e.g., "feat: add new feature", NOT "feat: Add new feature").
 
 Git diff:
 {diff}

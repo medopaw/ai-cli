@@ -44,7 +44,7 @@ pub async fn handle_fix(user_context: &str) -> Result<()> {
                 let startup_context = startup_errors.join("\n");
                 let config = Config::load()?;
                 let (provider_config, command_config) = config.get_error_analysis_ai_config()?;
-                let client = AiClient::new(provider_config.clone(), command_config.clone(), config.git.clone())?;
+                let client = AiClient::new_with_full_config(provider_config.clone(), command_config.clone(), config.git.clone(), config.clone())?;
                 
                 let mut context = String::new();
                 context.push_str(&format!("Shell: {}\n", Utils::get_current_shell().unwrap_or_else(|_| "unknown".to_string())));
@@ -171,7 +171,7 @@ pub async fn handle_fix(user_context: &str) -> Result<()> {
     println!("🤖 Loading AI configuration...");
     let config = Config::load()?;
     let (provider_config, command_config) = config.get_error_analysis_ai_config()?;
-    let client = AiClient::new(provider_config.clone(), command_config.clone(), config.git)?;
+    let client = AiClient::new_with_full_config(provider_config.clone(), command_config.clone(), config.git.clone(), config.clone())?;
 
     println!("🧠 Analyzing error and generating solution...");
     let ai_response = client.analyze_and_fix_error(&context, user_context).await?;
