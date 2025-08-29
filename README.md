@@ -36,7 +36,19 @@ Within `ai chat`, you can use:
 
 ## Installation
 
-### From Source (Recommended)
+### Direct Installation from Git (Recommended)
+
+The easiest way to install is directly from GitHub:
+
+```bash
+cargo install --git https://github.com/medopaw/ai-cli
+```
+
+This will download, compile, and install the latest version from the main branch to `~/.cargo/bin/` which should be in your PATH.
+
+### From Source
+
+If you want to modify the code or contribute:
 
 1. **Clone the repository**:
    ```bash
@@ -47,13 +59,6 @@ Within `ai chat`, you can use:
 2. **Install using Cargo**:
    ```bash
    cargo install --path .
-   ```
-   
-   This will install the `ai` binary to `~/.cargo/bin/` which should be in your PATH.
-
-3. **Verify installation**:
-   ```bash
-   ai help
    ```
 
 ### Alternative: Manual Build
@@ -69,9 +74,11 @@ cp target/release/ai ~/.local/bin/
 # Or add target/release to your PATH
 ```
 
-### Why Not `cargo install --git`?
+### Verify Installation
 
-The repository is currently private, so `cargo install --git https://github.com/medopaw/ai-cli` will fail with a 401 error. Use the source installation method above instead.
+```bash
+ai help
+```
 
 ## Configuration
 
