@@ -2,6 +2,7 @@ use anyhow::Result;
 use crate::config::Config;
 use crate::ai_client::AiClient;
 use crate::git_ops::GitOperations;
+use crate::utils::Utils;
 
 pub async fn handle_commit(all: bool) -> Result<()> {
     // Check if we're in a git repository
@@ -20,12 +21,31 @@ pub async fn handle_commit(all: bool) -> Result<()> {
         GitOperations::add_all()?;
     }
 
-    // Get staged diff
-    let diff = GitOperations::get_staged_diff()?;
-    if diff.trim().is_empty() {
-        println!("No staged changes to commit");
-        return Ok(());
+    // Check for staged changes
+    let has_staged = GitOperations::has_staged_changes()?;
+    if !has_staged {
+        // No staged changes, check if there are unstaged changes
+        let has_unstaged = GitOperations::has_unstaged_changes()?;
+        if !has_unstaged {
+            println!("No changes to commit. Working directory is clean.");
+            return Ok(());
+        }
+        
+        // There are unstaged changes but no staged changes
+        println!("No staged changes found, but there are unstaged changes.");
+        println!("Would you like to stage all changes and commit them?");
+        
+        if Utils::confirm("Stage all changes and commit?")? {
+            println!("Staging all changes...");
+            GitOperations::add_all()?;
+        } else {
+            println!("Commit cancelled.");
+            return Ok(());
+        }
     }
+
+    // Get staged diff (either from originally staged files or newly staged files)
+    let diff = GitOperations::get_staged_diff()?;
 
     println!("Generating commit message...");
     let commit_message = client.generate_commit_message(&diff).await?;

@@ -92,10 +92,22 @@ base_url = "http://localhost:11434"
 
 [git]
 commit_prompt = """
-请为以下 git diff 生成简洁的英文 commit message:
-- 遵循约定式提交规范
-- 首行不超过50字符
-- 如有需要，添加详细描述
+You are an expert software engineer that generates concise, 
+one-line Git commit messages based on the provided diffs.
+Review the provided context and diffs which are about to be committed to a git repo.
+Review the diffs carefully.
+Generate a one-line commit message for those changes.
+The commit message should be structured as follows: <type>: <description>
+Use these for <type>: fix, feat, build, chore, ci, docs, style, refactor, perf, test
+IMPORTANT: The description must start with a lowercase letter. Never capitalize the first letter of the description.
+
+Ensure the commit message:
+- Starts with the appropriate prefix.
+- Is in the imperative mood (e.g., "add feature" not "added feature" or "adding feature").
+- Does not exceed 72 characters.
+
+Reply only with the one-line commit message, without any additional text, explanations, or line breaks.
+Remember: description must start with lowercase letter (e.g., "feat: add new feature", NOT "feat: Add new feature").
 
 Git diff:
 {diff}

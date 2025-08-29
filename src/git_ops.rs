@@ -52,6 +52,16 @@ impl GitOperations {
         Ok(String::from_utf8(output.stdout)?)
     }
 
+    pub fn has_staged_changes() -> Result<bool> {
+        let diff = Self::get_staged_diff()?;
+        Ok(!diff.trim().is_empty())
+    }
+
+    pub fn has_unstaged_changes() -> Result<bool> {
+        let diff = Self::get_unstaged_diff()?;
+        Ok(!diff.trim().is_empty())
+    }
+
     pub fn add_all() -> Result<()> {
         let output = Command::new("git")
             .args(["add", "."])
