@@ -22,8 +22,9 @@ provider = "ollama"
 model = "qwen2.5-coder:7b"  # Shell错误和系统问题分析专家，支持中文环境
 # 使用 DeepSeek 示例: provider = "deepseek", model = "deepseek-reasoner"
 
-# Commit message 提示模板
+# Git 操作配置
 [git]
+# Commit message 提示模板
 commit_prompt = """
 You are an expert software engineer that generates concise, 
 one-line Git commit messages based on the provided diffs.
@@ -45,6 +46,11 @@ Remember: description must start with lowercase letter (e.g., "feat: add new fea
 Git diff:
 {diff}
 """
+
+# 大型 diff 处理配置
+max_diff_length = 8000         # diff字符数阈值，超过此长度启用分段处理
+max_concurrency = 3            # 最大并发AI请求数，防止API限制
+segment_timeout_seconds = 30   # 单个分段处理超时时间(秒)
 
 # 历史记录配置
 [history]

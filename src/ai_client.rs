@@ -1,7 +1,11 @@
 use crate::config::{ProviderConfig, CommandAiConfig, GitConfig, Config};
+use crate::git_ops::{DiffSegment, FileSummary, DiffStats};
 use anyhow::{anyhow, Result};
 use ai::clients::{ollama, openai};
 use ai::chat_completions::{ChatCompletion, ChatCompletionMessage, ChatCompletionRequestBuilder};
+use tokio::sync::Semaphore;
+use tokio::time::{timeout, Duration};
+use std::sync::Arc;
 
 pub enum AiClientType {
     Ollama(ollama::Client),
@@ -126,6 +130,147 @@ impl AiClient {
 
     pub async fn generate_commit_message(&self, diff: &str) -> Result<String> {
         let prompt = self.git_config.commit_prompt.replace("{diff}", diff);
+        self.ask(&prompt).await
+    }
+
+    /// Summarize diff segments in parallel with controlled concurrency
+    pub async fn summarize_diff_segments(&self, segments: Vec<DiffSegment>) -> Result<Vec<FileSummary>> {
+        let max_concurrency = self.git_config.max_concurrency;
+        let timeout_duration = Duration::from_secs(self.git_config.segment_timeout_seconds);
+        let semaphore = Arc::new(Semaphore::new(max_concurrency));
+
+        let total_segments = segments.len();
+        println!("Analyzing large diff in {} segments...", total_segments);
+
+        let mut tasks = Vec::new();
+        for (index, segment) in segments.into_iter().enumerate() {
+            let sem = semaphore.clone();
+            let client_type = match &self.client {
+                AiClientType::Ollama(client) => AiClientType::Ollama(client.clone()),
+                AiClientType::OpenAi(client) => AiClientType::OpenAi(client.clone()),
+            };
+            let model = self.command_config.model.clone();
+            
+            let task = async move {
+                let _permit = sem.acquire().await.map_err(|e| anyhow!("Semaphore error: {}", e))?;
+                
+                println!("Processing segment {}/{}...", index + 1, total_segments);
+                
+                let result = timeout(timeout_duration, async {
+                    Self::summarize_segment(&client_type, &model, &segment).await
+                }).await;
+
+                match result {
+                    Ok(summary_result) => summary_result,
+                    Err(_) => Err(anyhow!("Request timeout after {}s", timeout_duration.as_secs())),
+                }
+            };
+            
+            tasks.push(task);
+        }
+
+        // Wait for all tasks to complete
+        let mut all_summaries = Vec::new();
+        for task in tasks {
+            let segment_summaries = task.await?;
+            all_summaries.extend(segment_summaries);
+        }
+
+        println!("Analysis complete. Generating commit message...");
+        Ok(all_summaries)
+    }
+
+    /// Summarize a single diff segment
+    async fn summarize_segment(
+        client: &AiClientType, 
+        model: &str, 
+        segment: &DiffSegment
+    ) -> Result<Vec<FileSummary>> {
+        let prompt = format!(
+            "请简洁总结以下每个文件的变更(每个文件一行)：\n\n{}\n\n输出格式：\nfilename: 变更描述 (10字以内)\n\n示例：\nsrc/main.rs: 添加错误处理逻辑\nconfig.toml: 更新依赖版本",
+            segment.content
+        );
+
+        let request = ChatCompletionRequestBuilder::default()
+            .model(model)
+            .messages(vec![ChatCompletionMessage::User(prompt.into())])
+            .build()
+            .map_err(|e| anyhow!("Failed to build chat request: {}", e))?;
+
+        let response = match client {
+            AiClientType::Ollama(ollama_client) => {
+                ollama_client.chat_completions(&request).await
+                    .map_err(|e| anyhow!("Ollama API error: {}", e))?
+            }
+            AiClientType::OpenAi(openai_client) => {
+                openai_client.chat_completions(&request).await
+                    .map_err(|e| anyhow!("OpenAI API error: {}", e))?
+            }
+        };
+
+        let content = response.choices.first()
+            .and_then(|choice| choice.message.content.as_ref())
+            .ok_or_else(|| anyhow!("No response content from AI"))?;
+
+        // Parse the response into FileSummary objects
+        Self::parse_file_summaries(content, &segment.files)
+    }
+
+    /// Parse AI response into FileSummary objects
+    fn parse_file_summaries(content: &str, expected_files: &[String]) -> Result<Vec<FileSummary>> {
+        let mut summaries = Vec::new();
+        
+        for line in content.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with("输出格式") || line.starts_with("示例") {
+                continue;
+            }
+            
+            if let Some((filename, summary)) = line.split_once(':') {
+                let filename = filename.trim().to_string();
+                let summary = summary.trim().to_string();
+                
+                // Verify this file was actually in the segment
+                if expected_files.iter().any(|f| f.contains(&filename) || filename.contains(f)) {
+                    summaries.push(FileSummary { filename, summary });
+                }
+            }
+        }
+        
+        // If parsing failed, create fallback summaries
+        if summaries.is_empty() && !expected_files.is_empty() {
+            for filename in expected_files {
+                summaries.push(FileSummary {
+                    filename: filename.clone(),
+                    summary: "文件已修改".to_string(),
+                });
+            }
+        }
+        
+        Ok(summaries)
+    }
+
+    /// Generate final commit message based on stats and file summaries
+    pub async fn generate_final_commit_message(&self, stats: &DiffStats, file_summaries: &[FileSummary]) -> Result<String> {
+        let stats_text = format!(
+            "{} files changed, {} insertions(+), {} deletions(-)",
+            stats.files_changed, stats.lines_added, stats.lines_deleted
+        );
+
+        let mut file_details = String::new();
+        for summary in file_summaries.iter().take(10) { // Limit to prevent overflow
+            file_details.push_str(&format!("- {}: {}\n", summary.filename, summary.summary));
+        }
+        
+        if file_summaries.len() > 10 {
+            file_details.push_str(&format!("- ... and {} more files\n", file_summaries.len() - 10));
+        }
+
+        let prompt = format!(
+            "基于以下信息生成commit message：\n\n统计摘要：\n{}\n\n文件变更详情：\n{}\n\n生成符合conventional commits格式的一行commit message。\n描述必须以小写字母开头，不超过72字符。",
+            stats_text, file_details
+        );
+
         self.ask(&prompt).await
     }
 

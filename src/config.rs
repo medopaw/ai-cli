@@ -51,7 +51,18 @@ pub struct LegacyAiConfig {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GitConfig {
     pub commit_prompt: String,
+    #[serde(default = "default_max_diff_length")]
+    pub max_diff_length: usize,
+    #[serde(default = "default_max_concurrency")]
+    pub max_concurrency: usize,
+    #[serde(default = "default_segment_timeout_seconds")]
+    pub segment_timeout_seconds: u64,
 }
+
+// Default value functions for GitConfig fields
+fn default_max_diff_length() -> usize { 8000 }
+fn default_max_concurrency() -> usize { 3 }
+fn default_segment_timeout_seconds() -> u64 { 30 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct HistoryConfig {
@@ -102,6 +113,9 @@ impl Default for Config {
             },
             git: GitConfig {
                 commit_prompt: DEFAULT_GIT_COMMIT_PROMPT.to_string(),
+                max_diff_length: default_max_diff_length(),
+                max_concurrency: default_max_concurrency(),
+                segment_timeout_seconds: default_segment_timeout_seconds(),
             },
             history: HistoryConfig { 
                 enabled: DEFAULT_HISTORY_ENABLED 
@@ -210,7 +224,12 @@ impl Config {
                     model: legacy.ai.model.clone(),
                 },
             },
-            git: legacy.git,
+            git: GitConfig {
+                commit_prompt: legacy.git.commit_prompt,
+                max_diff_length: default_max_diff_length(),
+                max_concurrency: default_max_concurrency(),
+                segment_timeout_seconds: default_segment_timeout_seconds(),
+            },
             history: legacy.history,
             ai: None,
         };

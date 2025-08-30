@@ -47,8 +47,40 @@ pub async fn handle_commit(all: bool) -> Result<()> {
     // Get staged diff (either from originally staged files or newly staged files)
     let diff = GitOperations::get_staged_diff()?;
 
-    println!("Generating commit message...");
-    let commit_message = client.generate_commit_message(&diff).await?;
+    // Check diff length and decide processing strategy
+    let commit_message = if diff.len() > config.git.max_diff_length {
+        println!("Large diff detected ({} chars). Using intelligent processing...", diff.len());
+        
+        // Generate overall statistics
+        let stats = GitOperations::generate_diff_stats(&diff);
+        
+        // Segment the diff by files for parallel processing
+        let segments = GitOperations::segment_diff_by_files(&diff, config.git.max_diff_length);
+        
+        if segments.is_empty() {
+            return Err(anyhow::anyhow!("Failed to segment diff for processing"));
+        }
+
+        // Process segments in parallel to get file summaries
+        let file_summaries = client.summarize_diff_segments(segments).await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to analyze diff segments: {}\n\n\
+                    💡 Suggestions:\n\
+                    • Try staging fewer files at once: git add <specific-files>\n\
+                    • Ensure your network connection is stable\n\
+                    • Check if your AI provider is responding correctly",
+                    e
+                )
+            })?;
+
+        // Generate final commit message based on stats and summaries
+        client.generate_final_commit_message(&stats, &file_summaries).await?
+    } else {
+        // Use original logic for smaller diffs
+        println!("Generating commit message...");
+        client.generate_commit_message(&diff).await?
+    };
     
     println!("Commit message: {}", commit_message);
     GitOperations::commit(&commit_message)?;
