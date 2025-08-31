@@ -25,6 +25,8 @@ pub struct ProviderConfig {
     pub api_key: String,
     #[serde(default)]
     pub base_url: String,
+    #[serde(default)]
+    pub max_diff_length: Option<usize>, // Provider-specific override
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -60,7 +62,7 @@ pub struct GitConfig {
 }
 
 // Default value functions for GitConfig fields
-fn default_max_diff_length() -> usize { 8000 }
+fn default_max_diff_length() -> usize { 50000 }
 fn default_max_concurrency() -> usize { 3 }
 fn default_segment_timeout_seconds() -> u64 { 30 }
 
@@ -85,6 +87,7 @@ impl Default for Config {
             ProviderConfig {
                 api_key: "".to_string(),
                 base_url: DEFAULT_OLLAMA_BASE_URL.to_string(),
+                max_diff_length: None, // Will use model-specific defaults
             },
         );
         providers.insert(
@@ -92,6 +95,7 @@ impl Default for Config {
             ProviderConfig {
                 api_key: "".to_string(), // Will be filled from user input
                 base_url: DEFAULT_DEEPSEEK_BASE_URL.to_string(),
+                max_diff_length: Some(120000), // 32k tokens * 4 chars/token * 0.8 safety
             },
         );
 
@@ -163,6 +167,7 @@ impl Config {
                 ProviderConfig {
                     api_key: "".to_string(), // Will be filled from environment
                     base_url: legacy_ai.base_url.clone(),
+                    max_diff_length: None, // Use model-specific defaults
                 },
             );
         }
@@ -205,6 +210,7 @@ impl Config {
             ProviderConfig {
                 api_key: "".to_string(), // Will be filled from environment
                 base_url: legacy.ai.base_url.clone(),
+                max_diff_length: None, // Use model-specific defaults
             },
         );
 
@@ -256,6 +262,51 @@ impl Config {
 
     pub fn get_git_operations_ai_config(&self) -> Result<(&ProviderConfig, &CommandAiConfig)> {
         self.get_ai_config_for_command("git_operations")
+    }
+
+    /// Get the max diff length for a specific provider and model
+    pub fn get_max_diff_length_for_provider(&self, provider_name: &str, model: &str) -> usize {
+        // First check provider-specific override
+        if let Some(provider) = self.providers.get(provider_name) {
+            if let Some(max_length) = provider.max_diff_length {
+                return max_length;
+            }
+        }
+
+        // Use model-specific defaults based on known token limits
+        self.get_model_max_diff_length(provider_name, model)
+    }
+
+    /// Get model-specific max diff length based on known token limits
+    fn get_model_max_diff_length(&self, provider: &str, model: &str) -> usize {
+        match provider {
+            "openai" => {
+                match model {
+                    m if m.contains("gpt-4") => 120000,      // 32k tokens * 4 chars * 0.8 safety
+                    m if m.contains("gpt-3.5") => 50000,     // 16k tokens * 4 chars * 0.8 safety
+                    _ => 50000, // Conservative default for OpenAI
+                }
+            },
+            "deepseek" => {
+                match model {
+                    "deepseek-chat" => 120000,               // 32k tokens * 4 chars * 0.8 safety
+                    "deepseek-reasoner" => 120000,           // 32k tokens * 4 chars * 0.8 safety
+                    _ => 120000, // DeepSeek models generally have 32k context
+                }
+            },
+            "ollama" => {
+                match model {
+                    m if m.contains("qwen2.5") => 120000,    // 32k tokens * 4 chars * 0.8 safety
+                    m if m.contains("gemma2:9b") => 24000,   // 8k tokens * 4 chars * 0.8 safety
+                    m if m.contains("gemma2") => 120000,     // Larger gemma2 models
+                    m if m.contains("llama") => 120000,      // Most llama models
+                    m if m.contains("codeqwen") => 120000,   // Code models
+                    m if m.contains("codellama") => 120000,  // Code models
+                    _ => 24000, // Conservative default for unknown ollama models
+                }
+            },
+            _ => self.git.max_diff_length, // Fallback to global default
+        }
     }
 
     pub fn get_conversation_ai_config(&self) -> Result<(&ProviderConfig, &CommandAiConfig)> {

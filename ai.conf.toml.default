@@ -1,10 +1,12 @@
 # AI 服务提供商配置
 [providers.ollama]
 base_url = "http://localhost:11434"
+max_diff_length = 120000  # 可选：覆盖模型默认限制(大部分ollama模型支持32k tokens)
 
 [providers.deepseek]
 api_key = ""  # 从 https://platform.deepseek.com/ 获取 API Key
 base_url = "https://api.deepseek.com"
+max_diff_length = 120000    # DeepSeek支持32k tokens(约120k字符)
 
 # 不同命令使用的AI配置
 [commands.git_operations]  # commit, push, publish 命令
@@ -47,10 +49,16 @@ Git diff:
 {diff}
 """
 
-# 大型 diff 处理配置
-max_diff_length = 8000         # diff字符数阈值，超过此长度启用分段处理
+# 大型 diff 处理配置 (全局默认，各provider可覆盖)
+max_diff_length = 50000        # 全局默认diff字符数阈值
 max_concurrency = 3            # 最大并发AI请求数，防止API限制
 segment_timeout_seconds = 30   # 单个分段处理超时时间(秒)
+# 注：各模型实际限制会自动根据token容量调整:
+# - GPT-4: ~120k字符 (32k tokens)
+# - GPT-3.5: ~50k字符 (16k tokens) 
+# - DeepSeek: ~120k字符 (32k tokens)
+# - Ollama qwen2.5: ~120k字符 (32k tokens)
+# - Ollama gemma2:9b: ~24k字符 (8k tokens)
 
 # 历史记录配置
 [history]

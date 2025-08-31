@@ -47,15 +47,19 @@ pub async fn handle_commit(all: bool) -> Result<()> {
     // Get staged diff (either from originally staged files or newly staged files)
     let diff = GitOperations::get_staged_diff()?;
 
+    // Get provider-specific max diff length
+    let (_provider_config, command_config) = config.get_git_operations_ai_config()?;
+    let max_diff_length = config.get_max_diff_length_for_provider(&command_config.provider, &command_config.model);
+
     // Check diff length and decide processing strategy
-    let commit_message = if diff.len() > config.git.max_diff_length {
+    let commit_message = if diff.len() > max_diff_length {
         println!("Large diff detected ({} chars). Using intelligent processing...", diff.len());
         
         // Generate overall statistics
         let stats = GitOperations::generate_diff_stats(&diff);
         
         // Segment the diff by files for parallel processing
-        let segments = GitOperations::segment_diff_by_files(&diff, config.git.max_diff_length);
+        let segments = GitOperations::segment_diff_by_files(&diff, max_diff_length);
         
         if segments.is_empty() {
             return Err(anyhow::anyhow!("Failed to segment diff for processing"));
