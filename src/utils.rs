@@ -188,7 +188,9 @@ impl Utils {
     pub fn is_zsh_extended_history_enabled() -> bool {
         if let Ok(home) = std::env::var("HOME") {
             let hist_file = format!("{}/.zsh_history", home);
-            if let Ok(content) = std::fs::read_to_string(&hist_file) {
+            // Use read() instead of read_to_string() to handle non-UTF8 bytes
+            if let Ok(bytes) = std::fs::read(&hist_file) {
+                let content = String::from_utf8_lossy(&bytes);
                 // Check if history contains extended format entries
                 for line in content.lines().take(50) { // Check first 50 lines
                     if line.starts_with(':') && line.contains(';') {
