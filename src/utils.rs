@@ -285,7 +285,9 @@ impl Utils {
         // First try the history file directly
         if let Ok(home) = std::env::var("HOME") {
             let hist_file = format!("{}/.zsh_history", home);
-            if let Ok(content) = std::fs::read_to_string(&hist_file) {
+            // Use read() instead of read_to_string() to handle non-UTF8 bytes
+            if let Ok(bytes) = std::fs::read(&hist_file) {
+                let content = String::from_utf8_lossy(&bytes);
                 let mut entries = Vec::new();
                 
                 for line in content.lines() {
