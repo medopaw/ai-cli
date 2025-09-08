@@ -1,11 +1,10 @@
 [package]
 name = "ai-cli"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
-authors = ["yourui"]
+authors = ["Med0paW <medopaw@gmail.com>"]
 description = "Personal AI CLI tool for chat, git operations, and project publishing"
 license = "MIT"
-repository = "https://github.com/yourui/ai-cli"
 
 [[bin]]
 name = "ai"
